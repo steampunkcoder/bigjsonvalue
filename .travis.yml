@@ -1,0 +1,10 @@
+language: go
+go:
+  - "1.9"
+  - "1.10"
+  - stable
+  - master
+  - tip
+scripts:
+  - make test
+

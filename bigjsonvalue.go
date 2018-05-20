@@ -1,3 +1,4 @@
+// Package bigjsonvalue provides types to replace interface{} for decoding unknown JSON values
 package bigjsonvalue
 
 import (
@@ -35,10 +36,15 @@ type BigJSONValue struct {
 }
 
 // Kind returns the kind of BigJSONValue it is holding:
+//
 // Returns reflect.Bool if value is a bool.
+//
 // Returns reflect.String if value is a string.
+//
 // Returns reflect.Int if value is a big.Int.
+//
 // Returns reflect.Float64 if value is a big.Float.
+//
 // Otherwise returns reflect.Invalid (ie: nil value).
 func (bjv *BigJSONValue) Kind() reflect.Kind {
 	switch bjv.proxy.(type) {
@@ -103,10 +109,14 @@ func (bjv *BigJSONValue) BigInt() big.Int {
 	return bjv.proxy.(big.Int)
 }
 
-// String implements fmt.Stringer interface for a BigJSONValue
+// String implements fmt.Stringer interface for a BigJSONValue.
+//
 // Bool values return "true" or "false".
-// String values return as-is (no surround quotes are added).
+//
+// String values return as-is (no surround double-quotes are added).
+//
 // Number values return with as much precision as possible.
+//
 // Nil (invalid) values return "nil".
 func (bjv *BigJSONValue) String() string {
 	switch bjv.proxy.(type) {
@@ -127,13 +137,18 @@ func (bjv *BigJSONValue) String() string {
 
 // DecodeJSONValue decodes a JSON value, and returns itself.
 // Results are undefined if error is returned.
+//
 // The text "null" is decoded as a nil value.
+//
 // The text "true" and "false" are decoded as bool values.
+//
 // Text surrounded by double-quotes are decoded as string values.
+//
 // Number text containing period "." or the letters "e" or "E"
 // are decoded as big.Float values.
+//
 // Otherwise, number text is decoded as big.Int values.
-// Text is considered a number based on json.org.
+// Whether text is considered a number is based on json.org.
 func (bjv *BigJSONValue) DecodeJSONValue(text string) (*BigJSONValue, error) {
 	var err error
 	if text == "null" {
