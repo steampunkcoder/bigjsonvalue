@@ -1,4 +1,4 @@
-package common
+package bigjsonvalue
 
 import (
 	"encoding/json"
@@ -27,11 +27,9 @@ var ErrNotImplemented = errors.New("not implemented")
 // BigJSONValue is wrapper around interface{} type to force
 // json.Unmarshal() to decode integer values as integers instead of
 // float64.  The problem with float64 is that it doesn't have enough
-// precision to store exact values of large absolute int64 values.
-// So instead of trying to unmarshal JSON into an interface{},
+// precision to store exact values of large int64 and uint64 values.
+// Instead of trying to unmarshal JSON into an interface{},
 // unmarshal into a BigJSONValue instead.
-// The impetus for BigJSONValue is for decoding the JSON encoding of
-// WAL Logical-Decoding changes emitted from Postgres wal2json plugin.
 type BigJSONValue struct {
 	proxy interface{}
 }

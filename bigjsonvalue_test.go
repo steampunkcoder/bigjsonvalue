@@ -1,4 +1,4 @@
-package common
+package bigjsonvalue
 
 import (
 	"encoding/json"
