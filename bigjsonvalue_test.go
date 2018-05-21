@@ -2,17 +2,28 @@ package bigjsonvalue
 
 import (
 	"encoding/json"
-	"reflect"
-
+	"strconv"
 	"testing"
 )
 
-func TestDefaultValueIsNil(t *testing.T) {
+type testRec struct {
+	jsonStr   string
+	bigString string
+	bigKind   Kind
+	bigIsNil  bool
+	bigErr    error
+	natString string
+	natKind   Kind
+	natIsNil  bool
+	natErr    error
+}
+
+func TestBigDefaultValueIsNil(t *testing.T) {
 	bjvN := BigJSONValue{}
 	if !bjvN.IsNil() {
 		t.Errorf("bjvN is not nil BigJSONValue")
 	}
-	if bjvN.Kind() != reflect.Invalid {
+	if bjvN.Kind() != Nil {
 		t.Errorf("bjvN.Kind() unexpectedly returned %s", bjvN.Kind())
 	}
 
@@ -20,252 +31,149 @@ func TestDefaultValueIsNil(t *testing.T) {
 	if !bjvM.IsNil() {
 		t.Errorf("bjvM is not nil BigJSONValue")
 	}
-	if bjvM.Kind() != reflect.Invalid {
+	if bjvM.Kind() != Nil {
 		t.Errorf("bjvM.Kind() unexpectedly returned %s", bjvM.Kind())
 	}
 }
 
-func TestDecodeJSONValue(t *testing.T) {
-	bjvN := BigJSONValue{}
-	_, err := bjvN.DecodeJSONValue(`null`)
-	if err != nil {
-		t.Errorf("DecodeJSONValue of null string error: %s", err)
-	}
-	if bjvN.Value() != nil {
-		t.Errorf("bjvN.Value() should be nil")
-	}
-	if bjvN.String() != "nil" {
-		t.Errorf("DecodeJSONValue of null string failed: <%s>", bjvN.String())
-	}
-	if bjvN.Kind() != reflect.Invalid {
-		t.Errorf("bjvN.Kind() unexpectedly returned %s", bjvN.Kind())
-	}
-	if !bjvN.IsNil() {
-		t.Errorf("bjvN.IsNil() did not return true")
-	}
+var testList = []testRec{
+	{`null`,
+		`nil`, Nil, true, nil,
+		`nil`, Nil, true, nil},
+	{`true`,
+		`true`, Bool, false, nil,
+		`true`, Bool, false, nil},
+	{`false`,
+		`false`, Bool, false, nil,
+		`false`, Bool, false, nil},
+	{`"a\\b\\c new\nline"`,
+		"a\\b\\c new\nline", String, false, nil,
+		"a\\b\\c new\nline", String, false, nil},
+	{`18446744073709551616`, // math.MaxUint64 + 1
+		"18446744073709551616", BigInt, false, nil,
+		"18446744073709551615", Uint64, false, strconv.ErrRange},
+	{`-9223372036854775809`, // math.MinInt64 - 1
+		"-9223372036854775809", BigInt, false, nil,
+		"-9223372036854775808", Int64, false, strconv.ErrRange},
+	{`4.940656458412465441765687928682213723651e-324`, // math.SmallestNonzeroFloat64
+		"4.94065645841246544176568792868221372365e-324", BigFloat, false, nil,
+		"5e-324", Float64, false, nil},
+	{`1.797693134862315708145274237317043567981e+308`, // math.MaxFloat64
+		"1.79769313486231570814527423731704356798e+308", BigFloat, false, nil,
+		"1.7976931348623157e+308", Float64, false, nil},
+	{`1.7976931348623159e+308`, // more than math.MaxFloat64
+		"1.7976931348623159e+308", BigFloat, false, nil,
+		"+Inf", Float64, false, strconv.ErrRange},
+	{`-1.7976931348623159e+308`, // less than -math.MaxFloat64
+		"-1.7976931348623159e+308", BigFloat, false, nil,
+		"-Inf", Float64, false, strconv.ErrRange},
+	{`987654321987654321`,
+		"987654321987654321", BigInt, false, nil,
+		"987654321987654321", Uint64, false, nil},
+	{`-987654321987654321`,
+		"-987654321987654321", BigInt, false, nil,
+		"-987654321987654321", Int64, false, nil},
+	{`-3.14`,
+		"-3.14", BigFloat, false, nil,
+		"-3.14", Float64, false, nil},
+	{`987654321987654321.987654321987654321`,
+		"9.87654321987654321987654321987654321e+17", BigFloat, false, nil,
+		"9.876543219876543e+17", Float64, false, nil},
+	{`-0.987654321987654321987654321987654321E-69`,
+		"-9.87654321987654321987654321987654321e-70", BigFloat, false, nil,
+		"-9.876543219876543e-70", Float64, false, nil},
+	{`-987654321987654321987654321987654321e69`,
+		"-9.87654321987654321987654321987654321e+104", BigFloat, false, nil,
+		"-9.876543219876543e+104", Float64, false, nil},
+	{`{ "foo": "bar" }`,
+		"nil", Nil, true, ErrNotImplemented,
+		"nil", Nil, true, ErrNotImplemented},
+	{`[ 123, 456 ]`,
+		"nil", Nil, true, ErrNotImplemented,
+		"nil", Nil, true, ErrNotImplemented},
+	{`-123,456`,
+		"nil", Nil, true, ErrInvalidJSON,
+		"nil", Nil, true, ErrInvalidJSON},
+	{`+123456`,
+		"nil", Nil, true, ErrInvalidJSON,
+		"nil", Nil, true, ErrInvalidJSON},
+	{`.123456`,
+		"nil", Nil, true, ErrInvalidJSON,
+		"nil", Nil, true, ErrInvalidJSON},
+	{`-123,456.789`,
+		"nil", Nil, true, ErrInvalidJSON,
+		"nil", Nil, true, ErrInvalidJSON},
+	{`+123456.789`,
+		"nil", Nil, true, ErrInvalidJSON,
+		"nil", Nil, true, ErrInvalidJSON},
+	{`-123,456e7`,
+		"nil", Nil, true, ErrInvalidJSON,
+		"nil", Nil, true, ErrInvalidJSON},
+	{`+123456e7`,
+		"nil", Nil, true, ErrInvalidJSON,
+		"nil", Nil, true, ErrInvalidJSON},
+	{`0123456`,
+		"nil", Nil, true, ErrInvalidJSON,
+		"nil", Nil, true, ErrInvalidJSON},
+	{`-0123456`,
+		"nil", Nil, true, ErrInvalidJSON,
+		"nil", Nil, true, ErrInvalidJSON},
+}
 
-	bjvB := BigJSONValue{}
-	_, err = bjvB.DecodeJSONValue(`true`)
-	if err != nil {
-		t.Errorf("DecodeJSONValue of true bool string error: %s", err)
-	}
-	if bjvB.Value() == nil {
-		t.Errorf("bjvB.Value() should not be nil")
-	}
-	if bjvB.String() != "true" {
-		t.Errorf("DecodeJSONValue of true bool string failed: <%s>", bjvB.String())
-	}
-	if bjvB.Kind() != reflect.Bool {
-		t.Errorf("bjvB.Kind() unexpectedly returned %s", bjvB.Kind())
-	}
-	if !bjvB.IsBool() {
-		t.Errorf("bjvB.IsBool() did not return true")
-	}
-	_ = bjvB.Bool() // panics with runtime error if not a bool
-
-	bjvC := BigJSONValue{}
-	_, err = bjvC.DecodeJSONValue(`false`)
-	if err != nil {
-		t.Errorf("DecodeJSONValue of false bool string error: %s", err)
-	}
-	if bjvC.Value() == nil {
-		t.Errorf("bjvC.Value() should not be nil")
-	}
-	if bjvC.String() != "false" {
-		t.Errorf("DecodeJSONValue of false bool string failed: <%s>", bjvC.String())
-	}
-	if bjvC.Kind() != reflect.Bool {
-		t.Errorf("bjvC.Kind() unexpectedly returned %s", bjvC.Kind())
-	}
-	if !bjvC.IsBool() {
-		t.Errorf("bjvC.IsBool() did not return true")
-	}
-	_ = bjvB.Bool() // panics with runtime error if not a bool
-
-	bjvS := BigJSONValue{}
-	_, err = bjvS.DecodeJSONValue(`"a\\b\\c new\nline"`)
-	if err != nil {
-		t.Errorf("DecodeJSONValue of backslashed JSON string error: %s", err)
-	}
-	if bjvS.Value() == nil {
-		t.Errorf("bjvS.Value() should not be nil")
-	}
-	if bjvS.String() != "a\\b\\c new\nline" {
-		t.Errorf("DecodeJSONValue of backslashed JSON string failed: <%s>", bjvS.String())
-	}
-	if bjvS.Kind() != reflect.String {
-		t.Errorf("bjvS.Kind() unexpectedly returned %s", bjvS.Kind())
-	}
-	if !bjvS.IsString() {
-		t.Errorf("bjvS.IsString() did not return true")
-	}
-
-	bjvI := BigJSONValue{}
-	_, err = bjvI.DecodeJSONValue(`987654321987654321`)
-	if err != nil {
-		t.Errorf("DecodeJSONValue of large positive integer string error: %s", err)
-	}
-	if bjvI.Value() == nil {
-		t.Errorf("bjvI.Value() should not be nil")
-	}
-	if bjvI.String() != "987654321987654321" {
-		t.Errorf("DecodeJSONValue of large positive integer string failed: <%s>", bjvI.String())
-	}
-	if bjvI.Kind() != reflect.Int {
-		t.Errorf("bjvI.Kind() unexpectedly returned %s", bjvI.Kind())
-	}
-	if !bjvI.IsBigInt() {
-		t.Errorf("bjvI.IsBigInt() did not return true")
-	}
-	_ = bjvI.BigInt() // panics with runtime error if not a big.Int
-
-	bjvJ := BigJSONValue{}
-	_, err = bjvJ.DecodeJSONValue(`-987654321987654321`)
-	if err != nil {
-		t.Errorf("DecodeJSONValue of large negative integer string error: %s", err)
-	}
-	if bjvJ.Value() == nil {
-		t.Errorf("bjvJ.Value() should not be nil")
-	}
-	if bjvJ.String() != "-987654321987654321" {
-		t.Errorf("DecodeJSONValue of large negative integer string failed: <%s>", bjvJ.String())
-	}
-	if bjvJ.Kind() != reflect.Int {
-		t.Errorf("bjvJ.Kind() unexpectedly returned %s", bjvJ.Kind())
-	}
-	if !bjvJ.IsBigInt() {
-		t.Errorf("bjvJ.IsBigInt() did not return true")
-	}
-	_ = bjvJ.BigInt() // panics with runtime error if not a big.Int
-
-	bjvF := BigJSONValue{}
-	_, err = bjvF.DecodeJSONValue(`-3.14`)
-	if err != nil {
-		t.Errorf("DecodeJSONValue of negative float string error: %s", err)
-	}
-	if bjvF.Value() == nil {
-		t.Errorf("bjvF.Value() should not be nil")
-	}
-	if bjvF.String() != "-3.14" {
-		t.Errorf("DecodeJSONValue of negative float string failed: <%s>", bjvF.String())
-	}
-	if bjvF.Kind() != reflect.Float64 {
-		t.Errorf("bjvF.Kind() unexpectedly returned %s", bjvF.Kind())
-	}
-	if !bjvF.IsBigFloat() {
-		t.Errorf("bjvF.IsBigFloat() did not return true")
-	}
-	_ = bjvF.BigFloat() // panics with runtime error if not a big.Float
-
-	bjvG := BigJSONValue{}
-	_, err = bjvG.DecodeJSONValue(`987654321987654321.987654321987654321`)
-	if err != nil {
-		t.Errorf("DecodeJSONValue of large positive float string error: %s", err)
-	}
-	if bjvG.Value() == nil {
-		t.Errorf("bjvG.Value() should not be nil")
-	}
-	if bjvG.String() != "9.87654321987654321987654321987654321e+17" {
-		t.Errorf("DecodeJSONValue of large positive float string failed: <%s>", bjvG.String())
-	}
-	if bjvG.Kind() != reflect.Float64 {
-		t.Errorf("bjvG.Kind() unexpectedly returned %s", bjvG.Kind())
-	}
-	if !bjvG.IsBigFloat() {
-		t.Errorf("bjvG.IsBigFloat() did not return true")
-	}
-	_ = bjvG.BigFloat() // panics with runtime error if not a big.Float
-
-	bjvH := BigJSONValue{}
-	_, err = bjvH.DecodeJSONValue(`-0.987654321987654321987654321987654321E-69`)
-	if err != nil {
-		t.Errorf("DecodeJSONValue of small negative float string error: %s", err)
-	}
-	if bjvH.Value() == nil {
-		t.Errorf("bjvH.Value() should not be nil")
-	}
-	if bjvH.String() != "-9.87654321987654321987654321987654321e-70" {
-		t.Errorf("DecodeJSONValue of small negative float string failed: <%s>", bjvH.String())
-	}
-	if bjvH.Kind() != reflect.Float64 {
-		t.Errorf("bjvH.Kind() unexpectedly returned %s", bjvH.Kind())
-	}
-	if !bjvH.IsBigFloat() {
-		t.Errorf("bjvH.IsBigFloat() did not return true")
-	}
-	_ = bjvH.BigFloat() // panics with runtime error if not a big.Float
-
-	bjvX := BigJSONValue{}
-	_, err = bjvX.DecodeJSONValue(`-987654321987654321987654321987654321e69`)
-	if err != nil {
-		t.Errorf("DecodeJSONValue of large negative float string error: %s", err)
-	}
-	if bjvX.Value() == nil {
-		t.Errorf("bjvX.Value() should not be nil")
-	}
-	if bjvX.String() != "-9.87654321987654321987654321987654321e+104" {
-		t.Errorf("DecodeJSONValue of large negative float string failed: <%s>", bjvX.String())
-	}
-	if bjvX.Kind() != reflect.Float64 {
-		t.Errorf("bjvX.Kind() unexpectedly returned %s", bjvX.Kind())
-	}
-	if !bjvX.IsBigFloat() {
-		t.Errorf("bjvX.IsBigFloat() did not return true")
-	}
-	_ = bjvX.BigFloat() // panics with runtime error if not a big.Float
-
-	bjvE := BigJSONValue{}
-	_, err = bjvE.DecodeJSONValue(`{ foo: bar }`)
-	if err != ErrNotImplemented {
-		t.Errorf("DecodeJSONValue of braces string unexpected error: %s", err)
-	}
-
-	_, err = bjvE.DecodeJSONValue(`[ foo bar ]`)
-	if err != ErrNotImplemented {
-		t.Errorf("DecodeJSONValue of sq brackets string unexpected error: %s", err)
-	}
-
-	_, err = bjvE.DecodeJSONValue(`-123,456`)
-	if err != ErrInvalidJSON {
-		t.Errorf("DecodeJSONValue of non-number string unexpected error: %s", err)
-	}
-
-	_, err = bjvE.DecodeJSONValue(`+123456`)
-	if err != ErrInvalidJSON {
-		t.Errorf("DecodeJSONValue of non-number string unexpected error: %s", err)
-	}
-
-	_, err = bjvE.DecodeJSONValue(`.123456`)
-	if err != ErrInvalidJSON {
-		t.Errorf("DecodeJSONValue of non-number string unexpected error: %s", err)
-	}
-
-	_, err = bjvE.DecodeJSONValue(`-123,456.789`)
-	if err != ErrInvalidJSON {
-		t.Errorf("DecodeJSONValue of non-number string unexpected error: %s", err)
-	}
-
-	_, err = bjvE.DecodeJSONValue(`+123456.789`)
-	if err != ErrInvalidJSON {
-		t.Errorf("DecodeJSONValue of non-number string unexpected error: %s", err)
-	}
-
-	_, err = bjvE.DecodeJSONValue(`-123,456e7`)
-	if err != ErrInvalidJSON {
-		t.Errorf("DecodeJSONValue of non-number string unexpected error: %s", err)
-	}
-
-	_, err = bjvE.DecodeJSONValue(`+123456e7`)
-	if err != ErrInvalidJSON {
-		t.Errorf("DecodeJSONValue of non-number string unexpected error: %s", err)
+func TestBigDecodeJSONValue(t *testing.T) {
+	for idx, rec := range testList {
+		bjv := BigJSONValue{}
+		_, err := bjv.DecodeJSONValue(rec.jsonStr)
+		if err != rec.bigErr {
+			t.Errorf("%d: Unexpected err=%+v, bigErr=%s, testRec=%+v\n", idx, err, rec.bigErr, rec)
+		}
+		if bjv.Kind() != rec.bigKind {
+			t.Errorf("%d: Unexpected Kind()=%s, testRec=%+v\n", idx, bjv.Kind(), rec)
+		}
+		if bjv.Kind() == Nil && !bjv.IsNil() {
+			t.Errorf("%d: Unexpected IsNil()=%t, testRec=%+v\n", idx, bjv.IsNil(), rec)
+		}
+		if bjv.Kind() == Bool && !bjv.IsBool() {
+			t.Errorf("%d: Unexpected IsBool()=%t, testRec=%+v\n", idx, bjv.IsBool(), rec)
+		}
+		if bjv.Kind() == String && !bjv.IsString() {
+			t.Errorf("%d: Unexpected IsString()=%t, testRec=%+v\n", idx, bjv.IsString(), rec)
+		}
+		if bjv.Kind() == BigInt && !bjv.IsBigInt() {
+			t.Errorf("%d: Unexpected IsBigInt()=%t, testRec=%+v\n", idx, bjv.IsBigInt(), rec)
+		}
+		if bjv.Kind() == BigFloat && !bjv.IsBigFloat() {
+			t.Errorf("%d: Unexpected IsBigFloat()=%t, testRec=%+v\n", idx, bjv.IsBigFloat(), rec)
+		}
+		if bjv.IsNil() != rec.bigIsNil {
+			t.Errorf("%d: Unexpected IsNil()=%t, testRec=%+v\n", idx, bjv.IsNil(), rec)
+		}
+		if bjv.IsNil() && bjv.Value() != nil {
+			t.Errorf("%d: Unexpected non-nil Value()=%+v, testRec=%+v\n", idx, bjv.Value(), rec)
+		}
+		if !bjv.IsNil() && bjv.Value() == nil {
+			t.Errorf("%d: Unexpected nil Value()=%+v, testRec=%+v\n", idx, bjv.Value(), rec)
+		}
+		if bjv.IsBool() {
+			bjv.Bool() // panics with runtime error if not a bool
+		}
+		if bjv.IsBigInt() {
+			bjv.BigInt() // panics with runtime error if not a big.Int
+		}
+		if bjv.IsBigFloat() {
+			bjv.BigFloat() // panics with runtime error if not a big.Float
+		}
+		if bjv.String() != rec.bigString {
+			t.Errorf("%d: Unexpected String()=%s, testRec=%+v\n", idx, bjv.String(), rec)
+		}
 	}
 }
 
-type WalChangeRec struct {
+type bigWalChangeRec struct {
 	ColumnValues []BigJSONValue `json:"columnvalues"`
 }
 
-func TestUnmarshalJSON(t *testing.T) {
+func TestBigUnmarshalJSON(t *testing.T) {
 	jsonStr := `{ "columnvalues": [
 		null,
 		true,
@@ -276,17 +184,17 @@ func TestUnmarshalJSON(t *testing.T) {
 		-987654321987654321.987654321987654321
 	] }`
 
-	expectedKinds := []reflect.Kind{
-		reflect.Invalid,
-		reflect.Bool,
-		reflect.Bool,
-		reflect.String,
-		reflect.Float64,
-		reflect.Int,
-		reflect.Float64,
+	expectedKinds := []Kind{
+		Nil,
+		Bool,
+		Bool,
+		String,
+		BigFloat,
+		BigInt,
+		BigFloat,
 	}
 
-	var bigRec WalChangeRec
+	var bigRec bigWalChangeRec
 	err := json.Unmarshal([]byte(jsonStr), &bigRec)
 	if err != nil {
 		t.Errorf("json.Unmarshal err=%s\n", err)
@@ -297,5 +205,13 @@ func TestUnmarshalJSON(t *testing.T) {
 					bjv.String(), bjv.Kind(), idx, expectedKinds[idx])
 			}
 		}
+	}
+}
+
+func BenchmarkBigDecodeJSONNumbers(b *testing.B) {
+	bjv := BigJSONValue{}
+	for n := 0; n < b.N; n++ {
+		bjv.DecodeJSONValue(`987654321987654321`)
+		bjv.DecodeJSONValue(`987654321.987654321`)
 	}
 }

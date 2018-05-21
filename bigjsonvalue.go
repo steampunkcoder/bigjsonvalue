@@ -3,87 +3,74 @@ package bigjsonvalue
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
-	"reflect"
-	"regexp"
+	//"strconv"
 	"strings"
 )
 
-// JSONNumRegexpPat defines the regexp pattern for matching JSON numbers
-// (integers or floats) based on json.org
-const JSONNumRegexpPat = `^-?\d+(\.\d+)?([eE][-+]?\d+)?$`
-
-// This global regexp is (mostly) thread-safe according to
-// https://golang.org/pkg/regexp/#Regexp
-var jsonNumRegexp = regexp.MustCompile(JSONNumRegexpPat)
-
-// ErrInvalidJSON defines the invalid JSON error
-var ErrInvalidJSON = errors.New("invalid JSON")
-
-// ErrNotImplemented defines the not-implemented error
-var ErrNotImplemented = errors.New("not implemented")
-
 // BigJSONValue is wrapper around interface{} type to force
-// json.Unmarshal() to decode integer values as integers instead of
+// json.Unmarshal() to decode integer values as big.Int instead of
 // float64.  The problem with float64 is that it doesn't have enough
 // precision to store exact values of large int64 and uint64 values.
 // Instead of trying to unmarshal JSON into an interface{},
 // unmarshal into a BigJSONValue instead.
+//
+// Compared to NatJSONValue, BigJSONValue uses big.Int and big.Float to
+// store arbitrary-precision numbers, but is slower than NatJSONValue.
 type BigJSONValue struct {
 	proxy interface{}
 }
 
 // Kind returns the kind of BigJSONValue it is holding:
 //
-// Returns reflect.Bool if value is a bool.
+// Returns Bool if value is a bool.
 //
-// Returns reflect.String if value is a string.
+// Returns String if value is a string.
 //
-// Returns reflect.Int if value is a big.Int.
+// Returns BigInt if value is a big.Int.
 //
-// Returns reflect.Float64 if value is a big.Float.
+// Returns BigFloat if value is a big.Float.
 //
-// Otherwise returns reflect.Invalid (ie: nil value).
-func (bjv *BigJSONValue) Kind() reflect.Kind {
+// Otherwise returns Nil.
+func (bjv *BigJSONValue) Kind() Kind {
 	switch bjv.proxy.(type) {
 	case bool:
-		return reflect.Bool
+		return Bool
 	case string:
-		return reflect.String
+		return String
 	case big.Int:
-		return reflect.Int
+		return BigInt
 	case big.Float:
-		return reflect.Float64
+		return BigFloat
 	default:
-		return reflect.Invalid
+		return Nil
 	}
 }
 
-// IsNil returns true if value is nil (invalid).
+// IsNil returns true if value is nil.
 func (bjv *BigJSONValue) IsNil() bool {
-	return (bjv.Kind() == reflect.Invalid)
+	return (bjv.Kind() == Nil)
 }
 
 // IsBool returns true if value is a bool.
 func (bjv *BigJSONValue) IsBool() bool {
-	return (bjv.Kind() == reflect.Bool)
+	return (bjv.Kind() == Bool)
 }
 
 // IsString returns true if value is a string.
 func (bjv *BigJSONValue) IsString() bool {
-	return (bjv.Kind() == reflect.String)
+	return (bjv.Kind() == String)
 }
 
 // IsBigFloat returns true if value is a big.Float.
 func (bjv *BigJSONValue) IsBigFloat() bool {
-	return (bjv.Kind() == reflect.Float64)
+	return (bjv.Kind() == BigFloat)
 }
 
 // IsBigInt returns true if value is a big.Int.
 func (bjv *BigJSONValue) IsBigInt() bool {
-	return (bjv.Kind() == reflect.Int)
+	return (bjv.Kind() == BigInt)
 }
 
 // Value returns the underlying interface{} value that is being wrapped.
@@ -109,7 +96,7 @@ func (bjv *BigJSONValue) BigInt() big.Int {
 	return bjv.proxy.(big.Int)
 }
 
-// String implements fmt.Stringer interface for a BigJSONValue.
+// String implements fmt.Stringer interface for BigJSONValue.
 //
 // Bool values return "true" or "false".
 //
@@ -117,7 +104,7 @@ func (bjv *BigJSONValue) BigInt() big.Int {
 //
 // Number values return with as much precision as possible.
 //
-// Nil (invalid) values return "nil".
+// Nil values return "nil".
 func (bjv *BigJSONValue) String() string {
 	switch bjv.proxy.(type) {
 	case bool:
@@ -148,7 +135,7 @@ func (bjv *BigJSONValue) String() string {
 // are decoded as big.Float values.
 //
 // Otherwise, number text is decoded as big.Int values.
-// Whether text is considered a number is based on json.org.
+// Whether text is considered a number is based on http://json.org.
 func (bjv *BigJSONValue) DecodeJSONValue(text string) (*BigJSONValue, error) {
 	var err error
 	if text == "null" {
@@ -169,13 +156,16 @@ func (bjv *BigJSONValue) DecodeJSONValue(text string) (*BigJSONValue, error) {
 			bigf.SetPrec(128)
 			_, _, err = bigf.Parse(text, 10)
 			bjv.proxy = bigf
+		} else if strings.HasPrefix(text, "0") || strings.HasPrefix(text, "-0") {
+			err = ErrInvalidJSON
 		} else {
 			var bigi big.Int
-			_, ok := bigi.SetString(text, 10)
+			//_, ok := bigi.SetString(text, 10)
+			//if !ok {
+			//	err = strconv.ErrSyntax
+			//}
+			err = bigi.UnmarshalJSON([]byte(text))
 			bjv.proxy = bigi
-			if !ok {
-				err = fmt.Errorf("big.Int.SetString(%s) failed", text)
-			}
 		}
 	} else {
 		err = ErrInvalidJSON
@@ -183,9 +173,8 @@ func (bjv *BigJSONValue) DecodeJSONValue(text string) (*BigJSONValue, error) {
 	return bjv, err
 }
 
-// UnmarshalJSON implements the json.Unmarshaler interface for a BigJSONValue
+// UnmarshalJSON implements the json.Unmarshaler interface for BigJSONValue
 func (bjv *BigJSONValue) UnmarshalJSON(text []byte) error {
-	//fmt.Printf("BigJSONValue.UnmarshalJSON(%s)\n", text)
 	_, err := bjv.DecodeJSONValue(string(text))
 	return err
 }
