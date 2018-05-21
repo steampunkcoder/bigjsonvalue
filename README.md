@@ -2,19 +2,19 @@
 
 [![Build status][travis-image]][travis-url] [![License][license-image]][license-url] [![GoDoc][godoc-img]][godoc-url]
 
-> `BigJSONValue` replaces `interface{}` for decoding unknown JSON values
+> `bigjsonvalue` replaces `interface{}` for decoding unknown JSON values
 
-`BigJSONValue` is a wrapper around an `interface{}` type, to force
+`BigJSONValue` and `NatJSONValue` are wrappers around the `interface{}` type, to force
 [`json.Unmarshal()`](https://golang.org/pkg/encoding/json/#Unmarshal)
 to decode integer values as integers instead of `float64`.
 Main reason for this is `float64` doesn't have enough precision
 to store exact values of large `int64` or `uint64` values.
 Instead of trying to unmarshal unknown JSON values into an `interface{}`,
-unmarshal into a `BigJSONValue` instead.
+unmarshal into a `BigJSONValue` or `NatJSONValue` instead.
 
-#### Example Usage
+### Example Usage
 
-The impetus for BigJSONValue was decoding the JSON encoded output from
+The impetus for `bigjsonvalue` is decoding the JSON encoded output from
 [`wal2json`](https://github.com/eulerto/wal2json), which is an output plugin for
 [PostgreSQL Logical-Decoding](https://www.postgresql.org/docs/current/static/logicaldecoding.html).
 This example uses the [`pgx`](https://github.com/jackc/pgx) library to
@@ -69,10 +69,10 @@ func WalListenLoop() {
 
 ```
 
-#### API Docs
+### API Docs
 [![GoDoc][godoc-img]][godoc-url]
 
-#### License
+### License
 Released under MIT License [![License][license-image]][license-url]
 
 [godoc-url]: https://godoc.org/github.com/steampunkcoder/bigjsonvalue
