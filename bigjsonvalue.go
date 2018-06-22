@@ -135,7 +135,7 @@ func (bjv *BigJSONValue) String() string {
 // are decoded as big.Float values.
 //
 // Otherwise, number text is decoded as big.Int values.
-// Whether text is considered a number is based on http://json.org.
+// Whether text is considered a number is based on http://json.org
 func (bjv *BigJSONValue) DecodeJSONValue(text string) (*BigJSONValue, error) {
 	var err error
 	if text == "null" {

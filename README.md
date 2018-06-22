@@ -1,6 +1,6 @@
 # bigjsonvalue
 
-[![Build status][travis-image]][travis-url] [![License][license-image]][license-url] [![GoDoc][godoc-img]][godoc-url]
+[![Build status][travis-img]][travis-url] [![License][license-img]][license-url] [![GoDoc][godoc-img]][godoc-url]
 
 > `bigjsonvalue` replaces `interface{}` for decoding unknown JSON values
 
@@ -23,6 +23,8 @@ connect to the [`wal2json`](https://github.com/eulerto/wal2json) output of
 
 ```golang
 import (
+        "context"
+        "time"
         pgx "github.com/jackc/pgx"
         bjv "github.com/steampunkcoder/bigjsonvalue"
 )
@@ -52,16 +54,51 @@ type WalChangeTx struct {
 }
 
 func WalListenLoop() {
+        slotName := "myslot"
+
+        // Set walSenderTimeoutSecs to your PostgreSQL instance's wal_sender_timeout
+        var walSenderTimeoutSecs uint64 = 60
+
+        // Set startLsn to result of this PostgreSQL query:
+        //   SELECT confirmed_flush_lsn FROM pg_replication_slots WHERE slot_name='myslot'
+        // otherwise start from zero
+        var startLsn uint64 = 0
+
         rConn, _ := pgx.ReplicationConnect(...)
-        rConn.CreateReplicationSlot("myslot", "wal2json")
-        rConn.StartReplication("myslot", 0, -1, ...)
+        rConn.CreateReplicationSlot(slotName, "wal2json")
+        rConn.StartReplication(slotName, startLsn, -1, ...)
         for {
-                rMsg, _ := rConn.WaitForReplicationMessage(...)
-                if rMsg.WalMessage != nil {
+                replyFlag = false
+                timeoutCtx, ctxCancelFn := context.WithTimeout(context.Background(),
+                        time.Second * walSenderTimeoutSecs / 2)
+                defer ctxCancelFn()
+
+                rMsg, err := rConn.WaitForReplicationMessage(timeoutCtx)
+                ctxCancelFn()
+
+                if err == context.Canceled {
+                        break
+                } else if err == context.DeadlineExceeded {
+                        // PostgreSQL expects to be pinged by WAL client within wal_sender_timeout
+                        // otherwise PostgreSQL will force close connection
+                        replyFlag = true
+                } else if rMsg.WalMessage != nil {
                         var chgTx WalChangeTx
                         json.Unmarshal(rMsg.WalMessage.WalData, &chgTx)
+			if SuccessfullyProcessedWalChange(&chgTx) {
+                                // Tell PostgreSQL we've successfully processed the
+                                // LSN of this WAL change msg
+                                replyFlag = true
+                                startLsn = rMsg.WalMessage.WalStart
+			}
                 } else if rMsg.ServerHeartbeat != nil {
-                        sMsg, _ := pgx.NewStandbyStatus(...)
+			if rMsg.ServerHeartbeat.ReplyRequested == 1 {
+                                replyFlag = true
+			}
+                }
+
+                if replyFlag {
+                        sMsg, _ := pgx.NewStandbyStatus(startLsn)
                         rConn.SendStandbyStatus(sMsg)
                 }
         }
@@ -73,12 +110,12 @@ func WalListenLoop() {
 [![GoDoc][godoc-img]][godoc-url]
 
 ### License
-Released under MIT License [![License][license-image]][license-url]
+Released under MIT License [![License][license-img]][license-url]
 
-[godoc-url]: https://godoc.org/github.com/steampunkcoder/bigjsonvalue
 [godoc-img]: https://img.shields.io/badge/godoc-reference-blue.svg?style=flat-square
-[license-image]: https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square
+[godoc-url]: https://godoc.org/github.com/steampunkcoder/bigjsonvalue
+[license-img]: https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square
 [license-url]: LICENSE
-[travis-image]: https://img.shields.io/travis/steampunkcoder/bigjsonvalue.svg?style=flat-square
+[travis-img]: https://img.shields.io/travis/steampunkcoder/bigjsonvalue.svg?style=flat-square
 [travis-url]: https://travis-ci.org/steampunkcoder/bigjsonvalue
 

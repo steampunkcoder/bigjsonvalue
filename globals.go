@@ -5,7 +5,7 @@ import (
 	"regexp"
 )
 
-// Errors
+// Package errors
 var (
 	// ErrInvalidJSON defines the invalid JSON error
 	ErrInvalidJSON = errors.New("invalid JSON")
@@ -14,7 +14,7 @@ var (
 	ErrNotImplemented = errors.New("not implemented")
 )
 
-// Constants
+// Package constants
 const (
 	// JSONNumRegexpPat defines the regexp pattern for matching JSON numbers
 	// (integers or floats) based on http://json.org
